@@ -243,13 +243,39 @@ def led_fill(rgb):
     led.show()
 
 
-class _Btn:
-    def __init__(self, obj, digital):
-        self.obj = obj
-        self.digital = digital
+class _DigBtn:
+    def __init__(self, dio):
+        self.dio = dio
 
     def pressed(self):
-        return (not self.obj.value) if self.digital else self.obj.value
+        return not self.dio.value
+
+
+# Capacitive touch with per-pad baseline + hysteresis. touchio's default
+# (baseline + 100, sampled once) is unreliable on FunHouse-style pads —
+# it flickers near the threshold and drifts with humidity. We sample the
+# untouched baseline at startup, then use a wide press band and a narrower
+# release band so a touch latches cleanly.
+TOUCH_PRESS_DELTA = 300
+TOUCH_RELEASE_DELTA = 150
+
+
+class _TouchBtn:
+    def __init__(self, touch_in, baseline):
+        self.t = touch_in
+        self.press_at = baseline + TOUCH_PRESS_DELTA
+        self.release_at = baseline + TOUCH_RELEASE_DELTA
+        self.is_pressed = False
+
+    def pressed(self):
+        v = self.t.raw_value
+        if self.is_pressed:
+            if v < self.release_at:
+                self.is_pressed = False
+        else:
+            if v > self.press_at:
+                self.is_pressed = True
+        return self.is_pressed
 
 
 def _digital(name):
@@ -258,7 +284,7 @@ def _digital(name):
         return None
     b = digitalio.DigitalInOut(pin)
     b.switch_to_input(pull=digitalio.Pull.UP)
-    return _Btn(b, digital=True), "digital"
+    return _DigBtn(b), "digital"
 
 
 def _touch(name):
@@ -267,9 +293,16 @@ def _touch(name):
         return None
     try:
         import touchio
-        return _Btn(touchio.TouchIn(pin), digital=False), "touch"
     except ImportError:
         return None
+    t = touchio.TouchIn(pin)
+    # Let the pin settle, then sample N times and use the min as baseline.
+    time.sleep(0.05)
+    samples = []
+    for _ in range(15):
+        samples.append(t.raw_value)
+        time.sleep(0.004)
+    return _TouchBtn(t, min(samples)), "touch"
 
 
 def _first(*candidates):
