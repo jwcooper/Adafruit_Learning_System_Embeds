@@ -167,10 +167,10 @@
       <span class="label"><span id="connDot" class="dot"></span>Status</span>
       <span id="connText">Not connected</span>
       <span></span>
-      <span class="label">Button A</span>
+      <span id="btnALabel" class="label">Button A</span>
       <span><span id="btnA" class="pill">released</span></span>
       <span></span>
-      <span class="label">Button B</span>
+      <span id="btnBLabel" class="label">Button B</span>
       <span><span id="btnB" class="pill">released</span></span>
       <span></span>
     </div>
@@ -182,55 +182,135 @@
 
     <details>
       <summary>Board code (drop this into <code>code.py</code> on CIRCUITPY)</summary>
-<pre><code># code.py — Web Serial NeoPixel demo
+<pre><code># code.py — Web Serial demo (auto-detects board hardware)
 # Pairs with the Adafruit Learning System Web Serial embed.
+#
+# Works out of the box on: Circuit Playground Express/Bluefruit, CLUE,
+# QT Py ESP32-S2/S3 family (NEOPIXEL_POWER handled), FunHouse (DotStar +
+# capacitive touch), Feathers with a single NeoPixel, and most other
+# CircuitPython boards. If LEDs stay dark on a board with NEOPIXEL_POWER,
+# flip the value=True to value=False (some boards are active-low).
+#
 # Protocol:
-#   IN   "RGB:r,g,b\n"      set onboard NeoPixel color
-#   IN   "RAINBOW\n"        cycle hues
-#   IN   "STOP\n"           stop cycling
-#   OUT  "BTN:A:1" / "BTN:A:0"   button A press / release
-#   OUT  "BTN:B:1" / "BTN:B:0"   button B press / release
+#   IN   RGB:r,g,b      set LED color (stops rainbow)
+#   IN   RAINBOW        cycle hues
+#   IN   STOP           stop cycling
+#   IN   HELLO          reply with CAPS line
+#   OUT  CAPS:LED=...,A=...,B=...   capability report
+#   OUT  BTN:A:1 / BTN:A:0          button/touch A press / release
+#   OUT  BTN:B:1 / BTN:B:0          button/touch B press / release
 
 import sys
 import time
 import board
+import digitalio
 import supervisor
 
-try:
-    import neopixel
-    pixel = neopixel.NeoPixel(board.NEOPIXEL, 1, brightness=0.3, auto_write=False)
-except (ImportError, AttributeError):
-    pixel = None
 
-import digitalio
-def _maybe_button(name):
+def _setup_led():
+    power = getattr(board, "NEOPIXEL_POWER", None)
+    if power is not None:
+        p = digitalio.DigitalInOut(power)
+        p.switch_to_output(value=True)
+    np_pin = getattr(board, "NEOPIXEL", None)
+    if np_pin is not None:
+        try:
+            import neopixel
+            bid = getattr(board, "board_id", "")
+            n = 10 if bid.startswith("circuitplayground") else 1
+            return "neopixel", neopixel.NeoPixel(np_pin, n, brightness=0.3, auto_write=False)
+        except ImportError:
+            pass
+    clk = getattr(board, "DOTSTAR_CLOCK", None)
+    dat = getattr(board, "DOTSTAR_DATA", None)
+    if clk is not None and dat is not None:
+        try:
+            import adafruit_dotstar
+            n = 5 if getattr(board, "board_id", "") == "adafruit_funhouse" else 1
+            return "dotstar", adafruit_dotstar.DotStar(clk, dat, n, brightness=0.3, auto_write=False)
+        except ImportError:
+            pass
+    return None, None
+
+
+led_kind, led = _setup_led()
+
+
+def led_fill(rgb):
+    if led is None:
+        return
+    led.fill(rgb)
+    led.show()
+
+
+class _Btn:
+    def __init__(self, obj, digital):
+        self.obj = obj
+        self.digital = digital
+
+    def pressed(self):
+        return (not self.obj.value) if self.digital else self.obj.value
+
+
+def _digital(name):
     pin = getattr(board, name, None)
     if pin is None:
         return None
-    btn = digitalio.DigitalInOut(pin)
-    btn.switch_to_input(pull=digitalio.Pull.UP)
-    return btn
+    b = digitalio.DigitalInOut(pin)
+    b.switch_to_input(pull=digitalio.Pull.UP)
+    return _Btn(b, digital=True), "digital"
 
-btn_a = _maybe_button("BUTTON_A") or _maybe_button("BUTTON")
-btn_b = _maybe_button("BUTTON_B")
 
-def _pressed(b):
-    # Most Adafruit boards are active-low; invert.
-    return b is not None and not b.value
+def _touch(name):
+    pin = getattr(board, name, None)
+    if pin is None:
+        return None
+    try:
+        import touchio
+        return _Btn(touchio.TouchIn(pin), digital=False), "touch"
+    except ImportError:
+        return None
+
+
+def _first(*candidates):
+    for fn in candidates:
+        r = fn()
+        if r is not None:
+            return r
+    return None, None
+
+
+btn_a, kind_a = _first(
+    lambda: _digital("BUTTON_A"),
+    lambda: _digital("BUTTON"),
+    lambda: _digital("BOOT0"),
+    lambda: _touch("CAP6"),
+    lambda: _touch("BUTTON_DOWN"),
+)
+btn_b, kind_b = _first(
+    lambda: _digital("BUTTON_B"),
+    lambda: _touch("CAP7"),
+    lambda: _touch("BUTTON_SELECT"),
+)
+
+
+def report_caps():
+    print("CAPS:LED=%s,A=%s,B=%s" % (led_kind or "none",
+                                     kind_a or "none",
+                                     kind_b or "none"))
+
 
 def _hsv(h):
     h = h % 1.0
-    i = int(h * 6)
-    f = h * 6 - i
-    q = int(255 * (1 - f))
-    t = int(255 * f)
-    i %= 6
+    i = int(h * 6); f = h * 6 - i
+    q = int(255 * (1 - f)); t = int(255 * f); i %= 6
     return [(255, t, 0), (q, 255, 0), (0, 255, t),
             (0, q, 255), (t, 0, 255), (255, 0, q)][i]
 
+
 state = {"rainbow": False, "hue": 0.0}
-last_a = _pressed(btn_a)
-last_b = _pressed(btn_b)
+last_a = btn_a.pressed() if btn_a else False
+last_b = btn_b.pressed() if btn_b else False
 buf = ""
 
 while True:
@@ -239,38 +319,39 @@ while True:
         ch = sys.stdin.read(1)
         n -= 1
         if ch in ("\n", "\r"):
-            line = buf.strip()
-            buf = ""
+            line = buf.strip(); buf = ""
             if not line:
                 continue
-            if line.startswith("RGB:") and pixel is not None:
+            if line.startswith("RGB:") and led is not None:
                 try:
                     r, g, b = [int(x) for x in line[4:].split(",")]
                     state["rainbow"] = False
-                    pixel[0] = (r, g, b)
-                    pixel.show()
+                    led_fill((r, g, b))
                 except ValueError:
                     pass
             elif line == "RAINBOW":
                 state["rainbow"] = True
             elif line == "STOP":
                 state["rainbow"] = False
+            elif line == "HELLO":
+                report_caps()
         else:
             buf += ch
 
-    if state["rainbow"] and pixel is not None:
+    if state["rainbow"] and led is not None:
         state["hue"] = (state["hue"] + 0.005) % 1.0
-        pixel[0] = _hsv(state["hue"])
-        pixel.show()
+        led_fill(_hsv(state["hue"]))
 
-    cur_a = _pressed(btn_a)
-    if cur_a != last_a:
-        print("BTN:A:" + ("1" if cur_a else "0"))
-        last_a = cur_a
-    cur_b = _pressed(btn_b)
-    if cur_b != last_b:
-        print("BTN:B:" + ("1" if cur_b else "0"))
-        last_b = cur_b
+    if btn_a is not None:
+        cur = btn_a.pressed()
+        if cur != last_a:
+            print("BTN:A:" + ("1" if cur else "0"))
+            last_a = cur
+    if btn_b is not None:
+        cur = btn_b.pressed()
+        if cur != last_b:
+            print("BTN:B:" + ("1" if cur else "0"))
+            last_b = cur
 
     time.sleep(0.01)
 </code></pre>
@@ -293,6 +374,8 @@ while True:
       const connText = document.getElementById('connText');
       const btnA = document.getElementById('btnA');
       const btnB = document.getElementById('btnB');
+      const btnALabel = document.getElementById('btnALabel');
+      const btnBLabel = document.getElementById('btnBLabel');
       const noSerial = document.getElementById('noSerial');
 
       let port = null;
@@ -345,6 +428,20 @@ while True:
         });
       });
 
+      function setBtnAvailable(which, avail) {
+        const pill = which === 'A' ? btnA : btnB;
+        const label = which === 'A' ? btnALabel : btnBLabel;
+        const op = avail ? '' : '0.35';
+        pill.style.opacity = op;
+        label.style.opacity = op;
+        if (!avail) {
+          pill.classList.remove('pressed');
+          pill.textContent = 'n/a';
+        } else {
+          pill.textContent = 'released';
+        }
+      }
+
       function setConnected(state) {
         connDot.classList.toggle('on', state);
         connText.textContent = state ? 'Connected' : 'Not connected';
@@ -352,22 +449,33 @@ while True:
         disconnectBtn.disabled = !state;
         rainbowBtn.disabled = !state;
         if (!state) {
-          btnA.classList.remove('pressed');
-          btnA.textContent = 'released';
-          btnB.classList.remove('pressed');
-          btnB.textContent = 'released';
+          setBtnAvailable('A', true);
+          setBtnAvailable('B', true);
           rainbowOn = false;
           rainbowBtn.textContent = 'Rainbow';
         }
       }
 
-      function handleLine(line) {
-        const m = /^BTN:([AB]):([01])$/.exec(line.trim());
-        if (!m) return;
-        const pill = m[1] === 'A' ? btnA : btnB;
-        const pressed = m[2] === '1';
-        pill.classList.toggle('pressed', pressed);
-        pill.textContent = pressed ? 'pressed' : 'released';
+      function handleLine(rawLine) {
+        const line = rawLine.trim();
+        let m = /^BTN:([AB]):([01])$/.exec(line);
+        if (m) {
+          const pill = m[1] === 'A' ? btnA : btnB;
+          const pressed = m[2] === '1';
+          pill.classList.toggle('pressed', pressed);
+          pill.textContent = pressed ? 'pressed' : 'released';
+          return;
+        }
+        m = /^CAPS:(.*)$/.exec(line);
+        if (m) {
+          const fields = {};
+          for (const part of m[1].split(',')) {
+            const [k, v] = part.split('=');
+            if (k) fields[k.trim()] = (v || '').trim();
+          }
+          setBtnAvailable('A', fields.A && fields.A !== 'none');
+          setBtnAvailable('B', fields.B && fields.B !== 'none');
+        }
       }
 
       async function readLoop() {
@@ -409,6 +517,8 @@ while True:
           setConnected(true);
           readLoopPromise = readLoop();
           send(`RGB:${r.value},${g.value},${b.value}\n`);
+          send('HELLO\n');
+          setTimeout(() => { if (writer) send('HELLO\n'); }, 800);
         } catch (err) {
           console.warn('connect failed', err);
           setConnected(false);
