@@ -118,6 +118,34 @@
       color: #d6cfeb;
     }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .log {
+      height: 7rem;
+      max-height: 30vh;
+      overflow-y: auto;
+      background: #0a0716;
+      color: #cbb6e8;
+      padding: 0.55rem 0.7rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.78rem;
+      line-height: 1.4;
+      margin: 0.55rem 0 0;
+      border-radius: 6px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .log .tx { color: #79b1ff; }
+    .log .meta { color: #8a7ea8; font-style: italic; }
+    .log-controls {
+      display: flex;
+      gap: 0.85rem;
+      align-items: center;
+      flex-wrap: wrap;
+      font-size: 0.82rem;
+      margin-top: 0.55rem;
+      color: var(--muted);
+    }
+    .log-controls button { padding: 0.3rem 0.7rem; font-size: 0.78rem; }
+    .log-controls label { display: inline-flex; align-items: center; gap: 0.3rem; cursor: pointer; }
     .unsupported {
       grid-column: 1 / -1;
       background: #3a1f1f;
@@ -178,6 +206,16 @@
     <div id="noSerial" class="unsupported" hidden>
       Web Serial isn't available in this browser.
     </div>
+
+    <details open>
+      <summary>Serial log</summary>
+      <div class="log-controls">
+        <button id="logClear" class="secondary" type="button">Clear</button>
+        <label><input type="checkbox" id="logAutoScroll" checked> Auto-scroll</label>
+        <label><input type="checkbox" id="logShowTx" checked> Show sent</label>
+      </div>
+      <pre id="log" class="log"></pre>
+    </details>
 
     <details>
       <summary>Board code (drop this into <code>code.py</code> on CIRCUITPY)</summary>
@@ -409,6 +447,27 @@ while True:
       const btnALabel = document.getElementById('btnALabel');
       const btnBLabel = document.getElementById('btnBLabel');
       const noSerial = document.getElementById('noSerial');
+      const logEl = document.getElementById('log');
+      const logClearBtn = document.getElementById('logClear');
+      const logAutoScroll = document.getElementById('logAutoScroll');
+      const logShowTx = document.getElementById('logShowTx');
+
+      const LOG_MAX_LINES = 200;
+      function logAppend(kind, text) {
+        if (kind === 'tx' && !logShowTx.checked) return;
+        const span = document.createElement('span');
+        span.className = kind;
+        const prefix = kind === 'tx' ? '→ ' : kind === 'rx' ? '← ' : '· ';
+        span.textContent = prefix + text + '\n';
+        logEl.appendChild(span);
+        while (logEl.childElementCount > LOG_MAX_LINES) {
+          logEl.removeChild(logEl.firstChild);
+        }
+        if (logAutoScroll.checked) logEl.scrollTop = logEl.scrollHeight;
+      }
+      logClearBtn.addEventListener('click', () => {
+        while (logEl.firstChild) logEl.removeChild(logEl.firstChild);
+      });
 
       let port = null;
       let writer = null;
@@ -444,8 +503,10 @@ while True:
         if (!writer) return;
         try {
           await writer.write(encoder.encode(line));
+          logAppend('tx', line.replace(/\r?\n$/, ''));
         } catch (err) {
           console.warn('write failed', err);
+          logAppend('meta', 'write failed: ' + err.message);
         }
       }
 
@@ -490,6 +551,8 @@ while True:
 
       function handleLine(rawLine) {
         const line = rawLine.trim();
+        if (!line) return;
+        logAppend('rx', line);
         let m = /^BTN:([AB]):([01])$/.exec(line);
         if (m) {
           const pill = m[1] === 'A' ? btnA : btnB;
@@ -547,12 +610,14 @@ while True:
           writer = port.writable.getWriter();
           cancelRequested = false;
           setConnected(true);
+          logAppend('meta', '— connected at 115200 baud —');
           readLoopPromise = readLoop();
           send(`RGB:${r.value},${g.value},${b.value}\n`);
           send('HELLO\n');
           setTimeout(() => { if (writer) send('HELLO\n'); }, 800);
         } catch (err) {
           console.warn('connect failed', err);
+          logAppend('meta', 'connect failed: ' + err.message);
           setConnected(false);
         }
       }
@@ -565,6 +630,7 @@ while True:
         try { if (port) await port.close(); } catch (_) {}
         port = null;
         setConnected(false);
+        logAppend('meta', '— disconnected —');
       }
 
       connectBtn.addEventListener('click', connect);
