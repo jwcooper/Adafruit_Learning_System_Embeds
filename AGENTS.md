@@ -40,6 +40,26 @@ How to add a new oEmbed to this repository.
 
 `src`, `width`, `height`, `title`, `loading`, `allowfullscreen`, `allow`, `frameborder`, `style`. Anything else is stripped.
 
+## Browser-feature APIs (Web Serial, WebUSB, etc.)
+
+These APIs are gated by Permissions Policy via the `allow` attribute. Without the matching token, the call throws `SecurityError` even with otherwise-correct code. Common tokens:
+
+- `allow="serial"` — `navigator.serial` (Web Serial)
+- `allow="usb"` — `navigator.usb` (WebUSB)
+- `allow="hid"` — `navigator.hid` (WebHID)
+- `allow="bluetooth"` — Web Bluetooth
+- `allow="midi"`, `allow="microphone"`, `allow="camera"`
+
+Combine with `; ` separators: `allow="serial; usb"`. All also require a user gesture (a click) and HTTPS (`localhost` counts).
+
+## Sandbox CORS gotcha
+
+The iframe runs at a `null` opaque origin (sandbox without `allow-same-origin`), so every cross-origin `fetch()` sends `Origin: null`. Targets must respond with `Access-Control-Allow-Origin: *` or `null` — servers with an origin allow-list will reject the request, even if they accept the same fetch from `adafruit.github.io` directly. Verify before depending on a remote resource:
+
+```sh
+curl -sS -I -H "Origin: null" <url> | grep -i access-control
+```
+
 ## Allowed inline CSS properties
 
 `display`, `width`, `height`, `max-width`, `min-width`, `aspect-ratio`, `border`, `margin`. Other properties are dropped from the `style` attribute. Use `aspect-ratio` for responsive sizing.
