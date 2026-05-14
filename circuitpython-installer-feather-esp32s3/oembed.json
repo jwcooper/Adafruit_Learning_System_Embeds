@@ -1,0 +1,10 @@
+{
+  "version": "1.0",
+  "type": "rich",
+  "provider_name": "Adafruit",
+  "provider_url": "https://adafruit.github.io/Adafruit_Learning_System_Embeds/",
+  "title": "CircuitPython Installer — Adafruit Feather ESP32-S3",
+  "html": "<iframe src=\"https://adafruit.github.io/Adafruit_Learning_System_Embeds/circuitpython-installer/?boardid=adafruit_feather_esp32s3_4mbflash_2mbpsram&amp;version=10.2.1&amp;chipfamily=ESP32-S3&amp;boardname=Adafruit%20Feather%20ESP32-S3%204MB%20Flash%202MB%20PSRAM&amp;uf2file=https%3A%2F%2Fdownloads.circuitpython.org%2Fbin%2Fadafruit_feather_esp32s3_4mbflash_2mbpsram%2Fen_US%2Fadafruit-circuitpython-adafruit_feather_esp32s3_4mbflash_2mbpsram-en_US-10.2.1.uf2&amp;binfile=https%3A%2F%2Fdownloads.circuitpython.org%2Fbin%2Fadafruit_feather_esp32s3_4mbflash_2mbpsram%2Fen_US%2Fadafruit-circuitpython-adafruit_feather_esp32s3_4mbflash_2mbpsram-en_US-10.2.1.bin\" style=\"display:block;width:100%;aspect-ratio:4/3;border:0;\" loading=\"lazy\" allow=\"serial; usb\" title=\"CircuitPython Installer — Adafruit Feather ESP32-S3\"></iframe>",
+  "width": 1200,
+  "height": 900
+}

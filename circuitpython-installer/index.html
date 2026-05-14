@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CircuitPython Installer</title>
+  <style>
+    html, body { margin: 0; padding: 0; min-height: 100%; background: #0e0a1a; color: #f1eef9; font-family: system-ui, -apple-system, Segoe UI, sans-serif; }
+    body { display: grid; place-items: center; padding: 1.25rem; box-sizing: border-box; }
+    .panel { text-align: center; max-width: 520px; }
+    h1 { margin: 0 0 0.35rem; font-size: clamp(1.1rem, 3.5vw, 1.55rem); font-weight: 700; letter-spacing: 0.01em; }
+    .board { margin: 0 0 1.25rem; font-size: 1rem; opacity: 0.75; }
+    .installer-button {
+      appearance: none;
+      background: linear-gradient(180deg, #7b2cf3, #2575fc);
+      color: #fff;
+      border: 0;
+      padding: 0.9rem 1.5rem;
+      font: inherit;
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: 0.04em;
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(37, 117, 252, 0.35);
+      transition: transform 0.08s ease, filter 0.12s ease;
+    }
+    .installer-button:hover { filter: brightness(1.08); }
+    .installer-button:active { transform: translateY(1px); }
+    .installer-button[hidden] { display: none; }
+    .note { opacity: 0.55; margin: 1.1rem 0 0; font-size: 0.82rem; line-height: 1.45; }
+    .error { color: #ffb3b3; margin: 0; font-size: 0.95rem; line-height: 1.45; }
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <h1>Install CircuitPython</h1>
+    <p class="board" id="boardLabel">Loading&hellip;</p>
+    <button is="cp-install-button" id="installBtn" class="installer-button" hidden>
+      Open Installer
+    </button>
+    <p class="note">Requires Chrome or Edge (Web Serial). Connect your board over USB and click Open Installer.</p>
+  </main>
+
+  <script>
+    (function () {
+      const params = new URLSearchParams(window.location.search);
+      const boardId = params.get('boardid');
+      const version = params.get('version');
+      const uf2 = params.get('uf2file');
+      const bin = params.get('binfile');
+      const bootloader = params.get('bootloader');
+      const chipFamily = params.get('chipfamily');
+      const boardName = params.get('boardname');
+
+      const btn = document.getElementById('installBtn');
+      const label = document.getElementById('boardLabel');
+
+      if (!boardId) {
+        label.className = 'error';
+        label.textContent = 'No board configured. Pass ?boardid=...&version=...&uf2file=... in the URL.';
+        return;
+      }
+
+      btn.setAttribute('boardid', boardId);
+      if (version) btn.setAttribute('version', version);
+      if (uf2) btn.setAttribute('uf2file', uf2);
+      if (bin) btn.setAttribute('binfile', bin);
+      if (bootloader) btn.setAttribute('bootloader', bootloader);
+      if (chipFamily) btn.setAttribute('chipfamily', chipFamily);
+      if (boardName) btn.setAttribute('boardname', boardName);
+
+      label.textContent = boardName || boardId;
+      if (version) label.textContent += ' — CircuitPython ' + version;
+      btn.hidden = false;
+    })();
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.2.0/crypto-js.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/adafruit/web-firmware-installer-js@2/dist/cpinstaller.min.js" type="module"></script>
+</body>
+</html>
