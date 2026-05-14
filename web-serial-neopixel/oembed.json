@@ -1,0 +1,10 @@
+{
+  "version": "1.0",
+  "type": "rich",
+  "provider_name": "Adafruit",
+  "provider_url": "https://adafruit.github.io/Adafruit_Learning_System_Embeds/",
+  "title": "Web Serial NeoPixel Demo",
+  "html": "<iframe src=\"https://adafruit.github.io/Adafruit_Learning_System_Embeds/web-serial-neopixel/\" style=\"display:block;width:100%;aspect-ratio:4/3;border:0;\" loading=\"lazy\" allow=\"serial\" title=\"Web Serial NeoPixel Demo\"></iframe>",
+  "width": 1200,
+  "height": 900
+}
